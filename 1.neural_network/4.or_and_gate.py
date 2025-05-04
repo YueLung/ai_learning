@@ -1,106 +1,67 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 
-# 激活函數：Sigmoid & 導數
-def sigmoid(z):
-    return 1 / (1 + np.exp(-z))
+class AndOrModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Linear(2, 2),
+            nn.Sigmoid(),
+        )
+        # self.linear = nn.Linear(2, 1)
+        # self.activation = nn.Sigmoid()
 
+    def forward(self, x):
+        return self.model(x)
+        # return self.activation(self.linear(x))
+    
+x = torch.tensor([[0., 0.], [0., 1.], [1., 0.], [1., 1.]])
 
-def sigmoid_derivative(z):
-    s = sigmoid(z)
-    return s * (1 - s)
+y = torch.tensor([[0., 1., 1., 1.],
+                  [0., 0., 0., 1.]]).permute(1, 0)
 
+# y = torch.tensor([
+#     [0., 0.],  # (OR, AND)
+#     [1., 0.],
+#     [1., 0.],
+#     [1., 1.]
+# ])
 
-# 成本函數（MSE）與導數
-def cost(y_true, y_pred):
-    return np.mean((y_true - y_pred) ** 2)
+model = AndOrModel()
+criterion = nn.BCELoss()
+optimizer = optim.Adam(model.parameters(), lr=0.01)
 
+model.train()
+loss_history = []
+for epoch in range(3000):
+    y_predicted = model(x)
+    loss = criterion(y_predicted, y) # 這裡 loss 是一個 scalar，裡面記錄了整個運算圖（computational graph）。
+    loss_history.append(loss.item())
 
-def cost_derivative(y_true, y_pred):
-    return y_pred - y_true
+    optimizer.zero_grad() # 會清掉 optimizer 裡管理的參數
+    # model.zero_grad()   # 會直接清掉 model 內所有有 requires_grad=True 的參數
+    
+    loss.backward() # 這會沿著計算圖，自動把 loss 對 model 中的參數（例如 w, b）的偏導數算出來，存到 .grad 中。
+    optimizer.step() # w = w - lr * ∂loss/∂w
+                     # b = b - lr * ∂loss/∂b
 
+model.eval()
+with torch.no_grad():
+    y_predicted = model(x)
+    print(f'loss = {criterion(y_predicted, y)}')
+    for input, pred in zip(x, y_predicted):
+        or_pred, and_pred = pred
+        print(f'{input.tolist()} => or => {or_pred.item():.4f}, and => {and_pred.item():.4f}')
 
-# 神經網路訓練函數
-def train_nn(X, y, epochs=1000, lr=0.1):
-    n_samples, n_features = X.shape
-    # 權重初始化（隨機）
-    w = np.random.randn(n_features)
-    b = 0
+for p in model.parameters():
+    print(p)
 
-    losses = []
+plt.plot(loss_history)
+plt.xlabel('epoch')
+plt.ylabel('loss')
 
-    for epoch in range(epochs):
-        total_loss = 0
-
-        for xi, target in zip(X, y):
-            # === forward propagation ===
-            z = np.dot(xi, w) + b
-            y_hat = sigmoid(z)
-
-            # === cost ===
-            loss = cost(target, y_hat)
-            total_loss += loss
-
-            # === backpropagation ===
-            dcost_dy = cost_derivative(target, y_hat)
-            dy_dz = sigmoid_derivative(z)
-
-            dz_dw = xi
-            dz_db = 1
-
-            # 鏈式法則
-            dloss_dw = dcost_dy * dy_dz * dz_dw
-            dloss_db = dcost_dy * dy_dz * dz_db
-
-            # 參數更新
-            w -= lr * dloss_dw
-            b -= lr * dloss_db
-
-        losses.append(total_loss)
-
-    return w, b, losses
-
-
-# === 資料 ===
-X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
-
-y_and = np.array([0, 0, 0, 1])
-y_or = np.array([0, 1, 1, 1])
-
-# === 訓練 ===
-w_and, b_and, losses_and = train_nn(X, y_and)
-w_or, b_or, losses_or = train_nn(X, y_or)
-
-
-def predict(X, w, b):
-    z = np.dot(X, w) + b
-    return sigmoid(z)
-
-
-# 測試 AND Gate
-print("=== AND Gate Prediction ===")
-for xi, yi in zip(X, y_and):
-    y_pred = predict(xi, w_and, b_and)
-    print(
-        f"Input: {xi}, Target: {yi}, Predicted: {y_pred:.4f}, Class: {int(y_pred >= 0.5)}"
-    )
-
-# 測試 OR Gate
-print("\n=== OR Gate Prediction ===")
-for xi, yi in zip(X, y_or):
-    y_pred = predict(xi, w_or, b_or)
-    print(
-        f"Input: {xi}, Target: {yi}, Predicted: {y_pred:.4f}, Class: {int(y_pred >= 0.5)}"
-    )
-
-
-# === 繪圖 ===
-plt.plot(losses_and, label="AND Gate Loss")
-plt.plot(losses_or, label="OR Gate Loss")
-plt.xlabel("Epoch")
-plt.ylabel("Total Loss")
-plt.title("Neural Network Training (AND vs OR)")
-plt.legend()
-plt.grid(True)
-plt.show()
+# plt.show()

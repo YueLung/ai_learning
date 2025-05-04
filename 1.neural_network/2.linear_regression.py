@@ -44,7 +44,7 @@ def update_weights(x, y, weight, bias, learning_rate):
 # train
 loss_history = []
 lr = 0.01
-for i in range(1000): 
+for i in range(5000): 
      w, b = update_weights(x, y, w, b, lr)
      loss_history.append(get_loss(x, y, w, b))
 
